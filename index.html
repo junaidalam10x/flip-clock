@@ -20,7 +20,7 @@ body{font-family:"Rubik","Barlow","Segoe UI",Roboto,system-ui,sans-serif;color:v
 body.card{--flapbg:var(--card)}
 
 #stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
-  gap:calc(var(--s)*.1);flex-direction:column}
+  gap:calc(var(--s)*var(--g,.1));flex-direction:column}
 @media (orientation:landscape){#stage{flex-direction:row}}
 
 .blk{position:relative;width:var(--s);height:var(--s);flex:none}
@@ -33,6 +33,11 @@ body:not(.card) .lbl{top:calc(var(--s)*.02)}
 body:not(.card) .sub.l{left:calc(var(--s)*.02)} body:not(.card) .sub.r{right:calc(var(--s)*.02)}
 body:not(.card) .sub{bottom:calc(var(--s)*.0)}
 .hid{display:none}
+.unit.mini{inset:auto;right:calc(var(--s)*.06);bottom:calc(var(--s)*.045);width:calc(var(--s)*.15);height:calc(var(--s)*.1);
+  --f:calc(var(--s)*.085);perspective:calc(var(--s)*.6);z-index:6}
+.unit.mini::after{height:1px;background:var(--flapbg)}
+.mini span{font-weight:700}
+body:not(.card) .unit.mini{right:calc(var(--s)*.02);bottom:0}
 
 .unit{position:absolute;inset:0;perspective:calc(var(--s)*3)}
 .unit::after{content:"";position:absolute;left:0;right:0;top:50%;height:max(2px,calc(var(--s)*.011));
@@ -67,7 +72,7 @@ body:not(.card) .sub{bottom:calc(var(--s)*.0)}
 <body>
 <div id="stage">
   <div class="blk"><div class="lbl" id="lbl1"></div><div class="unit" id="u1"></div><div class="sub l" id="ampm"></div></div>
-  <div class="blk"><div class="lbl" id="lbl2"></div><div class="unit" id="u2"></div><div class="sub r" id="sec"></div></div>
+  <div class="blk"><div class="lbl" id="lbl2"></div><div class="unit" id="u2"></div><div class="unit mini" id="u3"></div></div>
 </div>
 
 <nav id="rail" aria-label="Controls">
@@ -95,8 +100,8 @@ body:not(.card) .sub{bottom:calc(var(--s)*.0)}
 
   /* ---------- flip digit pair ---------- */
   class Flip {
-    constructor(host) {
-      this.host = host; this.v = null;
+    constructor(host, d = 260) {
+      this.host = host; this.v = null; this.d = d;
       host.innerHTML = '<div class="half t"><span></span></div><div class="half b"><span></span></div>';
       this.t = host.children[0].firstChild; this.b = host.children[1].firstChild;
     }
@@ -111,13 +116,13 @@ body:not(.card) .sub{bottom:calc(var(--s)*.0)}
       const old = this.v; this.v = v;
       if (old === null || !animate || reduce) { this.t.textContent = v; this.b.textContent = v; return; }
       this.t.textContent = v;                  // new top shows behind the falling flap
-      const ft = this.flap('t', old), fb = this.flap('b', v), d = 260;
+      const ft = this.flap('t', old), fb = this.flap('b', v), d = this.d;
       ft.animate([{ transform: 'rotateX(0)' }, { transform: 'rotateX(-90deg)' }], { duration: d, easing: 'ease-in', fill: 'forwards' });
       const a = fb.animate([{ transform: 'rotateX(90deg)' }, { transform: 'rotateX(0)' }], { duration: d, delay: d, easing: 'ease-out', fill: 'both' });
       a.onfinish = () => { this.b.textContent = this.v; ft.remove(); fb.remove(); };
     }
   }
-  const hours = new Flip($('u1')), mins = new Flip($('u2'));
+  const hours = new Flip($('u1')), mins = new Flip($('u2')), secs = new Flip($('u3'), 150);
 
   /* ---------- layout: fit any screen ---------- */
   let ratio = 1.2;                              // width of "88" per 1em in the active font
@@ -127,9 +132,11 @@ body:not(.card) .sub{bottom:calc(var(--s)*.0)}
     ratio = c.measureText('88').width / 100 || 1.2;
   }
   function layout() {
-    const W = innerWidth, H = innerHeight, portrait = H >= W, gap = 0.1;
-    const s = portrait ? Math.min(W * (S.card ? .86 : .96), (H * .9) / (2 + gap))
-                       : Math.min(H * (S.card ? .8 : .86), (W * .9) / (2 + gap));
+    const W = innerWidth, H = innerHeight, portrait = H >= W;
+    const n = 2, gap = .1, tot = n + gap * (n - 1);
+    const s = portrait ? Math.min(W * (S.card ? .86 : .96), (H * .92) / tot)
+                       : Math.min(H * (S.card ? .8 : .86), (W * .92) / tot);
+    root.style.setProperty('--g', gap);
     const fit = S.card ? .8 : .94;
     root.style.setProperty('--s', s + 'px');
     root.style.setProperty('--f', Math.min(s * .95, fit * s / ratio) + 'px');
@@ -142,14 +149,13 @@ body:not(.card) .sub{bottom:calc(var(--s)*.0)}
     $('bFmt').textContent = S.h24 ? '24' : '12';
     $('bSec').classList.toggle('off', !S.sec);
     $('bDate').classList.toggle('off', !S.date);
-    $('sec').classList.toggle('hid', !S.sec);
+    $('u3').classList.toggle('hid', !S.sec);
     $('lbl1').classList.toggle('hid', !S.date);
     $('lbl2').classList.toggle('hid', !S.date);
     layout(); tick(false);
   }
 
   /* ---------- clock ---------- */
-  let lastSec = -1;
   function tick(animate = true) {
     const n = new Date(), h = n.getHours();
     const hh = S.h24 ? pad(h) : pad(h % 12 || 12);
@@ -157,11 +163,7 @@ body:not(.card) .sub{bottom:calc(var(--s)*.0)}
     $('ampm').textContent = S.h24 ? '' : (h >= 12 ? 'PM' : 'AM');
     $('lbl1').textContent = pad(n.getDate()) + '/' + pad(n.getMonth() + 1) + '/' + pad(n.getFullYear() % 100);
     $('lbl2').textContent = n.toLocaleDateString('en-US', { weekday: 'long' });
-    const sec = n.getSeconds();
-    if (sec !== lastSec) {
-      lastSec = sec; const el = $('sec'); el.textContent = pad(sec);
-      if (S.sec && animate && !reduce) el.animate([{ transform: 'translateY(35%)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 180 });
-    }
+    secs.set(pad(n.getSeconds()), animate);
   }
   (function loop() { tick(); setTimeout(loop, 1000 - (Date.now() % 1000) + 5); })();
 

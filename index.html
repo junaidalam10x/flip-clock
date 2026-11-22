@@ -15,7 +15,7 @@
 <style>
 :root{--fg:#999;--card:#0f0f0f;--s:300px;--f:200px;--flapbg:#000}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
-html,body{height:100%;width:100%;background:#000;overflow:hidden;overscroll-behavior:none;touch-action:manipulation}
+html,body{height:100%;width:100%;background:#000;overflow:hidden;overscroll-behavior:none;touch-action:none}
 body{font-family:"Rubik","Barlow","Segoe UI",Roboto,system-ui,sans-serif;color:var(--fg)}
 body.card{--flapbg:var(--card)}
 
@@ -52,7 +52,7 @@ body:not(.card) .unit.mini{right:calc(var(--s)*.02);bottom:0}
 .t span{top:0} .b span{bottom:0}
 
 /* control rail */
-#rail{--bs:min(52px,calc((100vw - 56px)/7 - 8px));position:fixed;display:flex;gap:8px;padding:8px;background:#121212;border-radius:28px;z-index:20;
+#rail{--bs:min(52px,calc((100vw - 56px)/5 - 8px));position:fixed;display:flex;gap:8px;padding:8px;background:#121212;border-radius:28px;z-index:20;
   opacity:0;pointer-events:none;transition:opacity .25s}
 #rail.show{opacity:1;pointer-events:auto}
 #rail button{width:var(--bs);height:var(--bs);border:0;border-radius:18px;background:#1e1e1e;color:#bbb;
@@ -62,7 +62,7 @@ body:not(.card) .unit.mini{right:calc(var(--s)*.02);bottom:0}
 #rail .off{opacity:.35}
 #swatch{width:24px;height:24px;border-radius:50%;background:var(--fg)}
 @media (orientation:landscape){
-  #rail{--bs:min(52px,calc((100vh - 40px)/7 - 8px));right:calc(env(safe-area-inset-right) + 14px);top:50%;transform:translateY(-50%);flex-direction:column}
+  #rail{--bs:min(52px,calc((100vh - 40px)/5 - 8px));right:calc(env(safe-area-inset-right) + 14px);top:50%;transform:translateY(-50%);flex-direction:column}
 }
 @media (orientation:portrait){
   #rail{bottom:calc(env(safe-area-inset-bottom) + 18px);left:50%;transform:translateX(-50%)}
@@ -81,15 +81,13 @@ body:not(.card) .unit.mini{right:calc(var(--s)*.02);bottom:0}
   <button id="bSec" aria-label="Show seconds">SS</button>
   <button id="bDate" aria-label="Show date"><svg viewBox="0 0 24 24"><path d="M7 2v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2V2h-2v2H9V2zM5 9h14v11H5z"/></svg></button>
   <button id="bCol" aria-label="Colour"><span id="swatch"></span></button>
-  <button id="bFs" aria-label="Full screen"><svg viewBox="0 0 24 24"><path d="M4 9V4h5v2H6v3zm11-5h5v5h-2V6h-3zM4 15h2v3h3v2H4zm14 0h2v5h-5v-2h3z"/></svg></button>
-  <button id="bInst" class="hid" aria-label="Install app"><svg viewBox="0 0 24 24"><path d="M11 3h2v9.2l3.3-3.3 1.4 1.4L12 16l-5.7-5.7 1.4-1.4L11 12.200zM5 18h14v2H5z"/></svg></button>
 </nav>
 
 <script>
 (() => {
   const COLORS = ['#999999', '#e2e2e2', '#ffb000', '#39d98a', '#ff5a5f', '#4da3ff'];
   const KEY = 'flipclock.v1';
-  const S = Object.assign({ card: false, h24: true, sec: true, date: true, col: 0 },
+  const S = Object.assign({ card: false, h24: true, sec: true, date: true, col: 0, zoom: 1 },
     (() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } })());
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
 
@@ -134,10 +132,11 @@ body:not(.card) .unit.mini{right:calc(var(--s)*.02);bottom:0}
   function layout() {
     const W = innerWidth, H = innerHeight, portrait = H >= W;
     const n = 2, gap = .1, tot = n + gap * (n - 1);
-    const s = portrait ? Math.min(W * (S.card ? .86 : .96), (H * .92) / tot)
+    let s = portrait ? Math.min(W * (S.card ? .86 : .96), (H * .92) / tot)
                        : Math.min(H * (S.card ? .8 : .86), (W * .92) / tot);
     root.style.setProperty('--g', gap);
     const fit = S.card ? .8 : .94;
+    s *= Math.min(1, Math.max(.4, S.zoom));
     root.style.setProperty('--s', s + 'px');
     root.style.setProperty('--f', Math.min(s * .95, fit * s / ratio) + 'px');
   }
@@ -167,10 +166,28 @@ body:not(.card) .unit.mini{right:calc(var(--s)*.02);bottom:0}
   }
   (function loop() { tick(); setTimeout(loop, 1000 - (Date.now() % 1000) + 5); })();
 
+  /* ---------- pinch to zoom ---------- */
+  let pinch = null, pinched = false;
+  const dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  const stage = $('stage');
+  stage.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) { pinch = { d: dist(e.touches), z: S.zoom }; pinched = true; }
+  }, { passive: true });
+  stage.addEventListener('touchmove', e => {
+    if (pinch && e.touches.length === 2) {
+      e.preventDefault();
+      S.zoom = Math.min(1, Math.max(.4, pinch.z * dist(e.touches) / pinch.d));
+      layout();
+    }
+  }, { passive: false });
+  stage.addEventListener('touchend', e => {
+    if (e.touches.length < 2 && pinch) { pinch = null; save(); setTimeout(() => pinched = false, 300); }
+  });
+
   /* ---------- controls ---------- */
   const rail = $('rail'); let hideT;
   const showRail = () => { rail.classList.add('show'); clearTimeout(hideT); hideT = setTimeout(() => rail.classList.remove('show'), 5000); };
-  $('stage').addEventListener('click', () => rail.classList.contains('show') ? rail.classList.remove('show') : showRail());
+  $('stage').addEventListener('click', () => pinched ? 0 : rail.classList.contains('show') ? rail.classList.remove('show') : showRail());
   rail.addEventListener('click', e => { e.stopPropagation(); showRail(); });
   const on = (id, fn) => $(id).addEventListener('click', () => { fn(); save(); apply(); });
   on('bStyle', () => S.card = !S.card);
@@ -178,17 +195,6 @@ body:not(.card) .unit.mini{right:calc(var(--s)*.02);bottom:0}
   on('bSec', () => S.sec = !S.sec);
   on('bDate', () => S.date = !S.date);
   on('bCol', () => S.col = (S.col + 1) % COLORS.length);
-  $('bFs').addEventListener('click', () => {
-    const d = document;
-    if (d.fullscreenElement) d.exitFullscreen(); else (root.requestFullscreen || root.webkitRequestFullscreen || (() => {})).call(root);
-  });
-
-  /* ---------- install prompt ---------- */
-  let deferred;
-  addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferred = e; $('bInst').classList.remove('hid'); });
-  $('bInst').addEventListener('click', async () => { if (!deferred) return; deferred.prompt(); await deferred.userChoice; deferred = null; $('bInst').classList.add('hid'); });
-  addEventListener('appinstalled', () => $('bInst').classList.add('hid'));
-
   /* ---------- keep screen awake ---------- */
   let lock;
   async function wake() { try { if ('wakeLock' in navigator && !lock) { lock = await navigator.wakeLock.request('screen'); lock.onrelease = () => lock = null; } } catch (e) {} }
@@ -196,7 +202,12 @@ body:not(.card) .unit.mini{right:calc(var(--s)*.02);bottom:0}
   addEventListener('pointerdown', wake, { once: true }); wake();
 
   /* ---------- boot ---------- */
-  addEventListener('resize', layout); addEventListener('orientationchange', () => setTimeout(layout, 150));
+  const relayout = () => { layout(); setTimeout(layout, 120); setTimeout(layout, 400); };
+  addEventListener('resize', relayout);
+  addEventListener('orientationchange', relayout);
+  matchMedia('(orientation: portrait)').addEventListener('change', relayout);
+  if (screen.orientation) screen.orientation.addEventListener('change', relayout);
+  if (window.visualViewport) visualViewport.addEventListener('resize', relayout);
   measure(); apply();
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { measure(); layout(); });
   if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));

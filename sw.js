@@ -1,4 +1,4 @@
-const CACHE = 'flip-clock-v3';
+const CACHE = 'flip-clock-v7';
 const ASSETS = ['./', 'index.html', 'manifest.webmanifest',
   'icon-192.png', 'icon-512.png', 'maskable-512.png'];
 

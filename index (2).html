@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Flip Clock">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Flip Clock</title>
+<style>
+:root{--fg:#999;--card:#0f0f0f;--s:300px;--f:200px;--flapbg:#000}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+html,body{height:100%;width:100%;background:#000;overflow:hidden;overscroll-behavior:none;touch-action:none}
+body{font-family:"Rubik","Barlow","Segoe UI",Roboto,system-ui,sans-serif;color:var(--fg)}
+body.card{--flapbg:var(--card)}
+
+#stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+  gap:calc(var(--s)*var(--g,.1));flex-direction:column}
+@media (orientation:landscape){#stage{flex-direction:row}}
+
+.blk{position:relative;width:var(--s);height:var(--s);flex:none}
+body.card .blk::before{content:"";position:absolute;inset:0;background:var(--card);border-radius:calc(var(--s)*.14)}
+.lbl{position:absolute;top:calc(var(--s)*.045);left:0;right:0;text-align:center;
+  font-size:calc(var(--s)*.065);font-weight:600;z-index:6;letter-spacing:.02em}
+body:not(.card) .lbl{top:calc(var(--s)*.02)}
+.sub{position:absolute;bottom:calc(var(--s)*.05);font-size:calc(var(--s)*.07);font-weight:700;z-index:6;line-height:1}
+.sub.l{left:calc(var(--s)*.07)} .sub.r{right:calc(var(--s)*.07)}
+body:not(.card) .sub.l{left:calc(var(--s)*.02)} body:not(.card) .sub.r{right:calc(var(--s)*.02)}
+body:not(.card) .sub{bottom:calc(var(--s)*.0)}
+.hid{display:none}
+body.pomo #rail .ck,body:not(.pomo) #rail .pm{display:none}
+#ask{position:fixed;inset:0;background:rgba(0,0,0,.82);display:none;align-items:center;justify-content:center;z-index:40;padding:24px}
+#ask.show{display:flex}
+#ask .box{background:#141414;border-radius:24px;padding:22px;max-width:340px;width:100%;text-align:center;color:#ccc}
+#ask h2{font-size:20px;margin-bottom:8px;color:var(--fg)}
+#ask p{font-size:15px;line-height:1.45;margin-bottom:18px;color:#aaa}
+#ask button{width:100%;padding:14px;border:0;border-radius:16px;font:700 16px inherit;font-family:inherit;margin-top:8px;cursor:pointer}
+#ask .ok{background:var(--fg);color:#000} #ask .no{background:#222;color:#bbb}
+#toast{position:fixed;top:calc(env(safe-area-inset-top) + 18px);left:50%;transform:translateX(-50%);background:#1b1b1b;color:var(--fg);
+  padding:12px 18px;border-radius:16px;font-weight:600;font-size:16px;opacity:0;transition:opacity .3s;z-index:30;pointer-events:none;text-align:center}
+#toast.show{opacity:1}
+.unit.mini{inset:auto;right:calc(var(--s)*.06);bottom:calc(var(--s)*.045);width:calc(var(--s)*.15);height:calc(var(--s)*.1);
+  --f:calc(var(--s)*.085);perspective:calc(var(--s)*.6);z-index:6}
+.unit.mini::after{height:1px;background:var(--flapbg)}
+.mini span{font-weight:700}
+body:not(.card) .unit.mini{right:calc(var(--s)*.02);bottom:0}
+
+.unit{position:absolute;inset:0;perspective:calc(var(--s)*3)}
+.unit::after{content:"";position:absolute;left:0;right:0;top:50%;height:max(2px,calc(var(--s)*.011));
+  transform:translateY(-50%);background:#000;z-index:5}
+.half,.flap{position:absolute;left:0;right:0;height:50%;overflow:hidden}
+.t{top:0} .b{bottom:0}
+.flap{background:var(--flapbg);backface-visibility:hidden;-webkit-backface-visibility:hidden;will-change:transform}
+.flap.t{transform-origin:50% 100%} .flap.b{transform-origin:50% 0}
+.flap.t{z-index:3} .flap.b{z-index:4}
+.half span,.flap span{position:absolute;left:0;right:0;height:200%;display:flex;align-items:center;justify-content:center;
+  font-size:var(--f);font-weight:800;line-height:1;font-variant-numeric:tabular-nums;color:var(--fg)}
+.t span{top:0} .b span{bottom:0}
+
+/* control rail */
+#rail{--bs:min(52px,calc((100vw - 56px)/6 - 8px));position:fixed;display:flex;gap:8px;padding:8px;background:#121212;border-radius:28px;z-index:20;
+  opacity:0;pointer-events:none;transition:opacity .25s}
+#rail.show{opacity:1;pointer-events:auto}
+#rail button{width:var(--bs);height:var(--bs);border:0;border-radius:18px;background:#1e1e1e;color:#bbb;
+  display:flex;align-items:center;justify-content:center;font:700 16px/1 inherit;font-family:inherit;cursor:pointer}
+#rail button:active{background:#2a2a2a}
+#rail svg{width:55%;height:55%;fill:currentColor}
+#rail .off{opacity:.35}
+#swatch{width:24px;height:24px;border-radius:50%;background:var(--fg)}
+@media (orientation:landscape){
+  #rail{--bs:min(52px,calc((100vh - 40px)/6 - 8px));right:calc(env(safe-area-inset-right) + 14px);top:50%;transform:translateY(-50%);flex-direction:column}
+}
+@media (orientation:portrait){
+  #rail{bottom:calc(env(safe-area-inset-bottom) + 18px);left:50%;transform:translateX(-50%)}
+}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="blk"><div class="lbl" id="lbl1"></div><div class="unit" id="u1"></div><div class="sub l" id="ampm"></div></div>
+  <div class="blk"><div class="lbl" id="lbl2"></div><div class="unit" id="u2"></div><div class="unit mini" id="u3"></div></div>
+</div>
+
+<div id="toast"></div>
+<div id="ask"><div class="box"><h2>Allow notifications?</h2>
+  <p>So the timer can alert you when a focus session or break ends, even if you switch to another app.</p>
+  <button class="ok" id="askOk">Allow</button><button class="no" id="askNo">Not now</button></div></div>
+<nav id="rail" aria-label="Controls">
+  <button id="bStyle" class="ck" aria-label="Switch style"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg></button>
+  <button id="bFmt" class="ck" aria-label="12 or 24 hour">24</button>
+  <button id="bSec" class="ck" aria-label="Show seconds">SS</button>
+  <button id="bDate" class="ck" aria-label="Show date"><svg viewBox="0 0 24 24"><path d="M7 2v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2V2h-2v2H9V2zM5 9h14v11H5z"/></svg></button>
+  <button id="bCol" class="ck" aria-label="Colour"><span id="swatch"></span></button>
+  <button id="bPomo" class="ck" aria-label="Pomodoro timer"><svg viewBox="0 0 24 24"><path d="M9 1h6v2H9zm3 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm1 3v5h-2V8z"/></svg></button>
+  <button id="bExit" class="pm" aria-label="Back to clock"><svg viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 5h-2v6l5 3 1-1.7-4-2.3z"/></svg></button>
+  <button id="bPlay" class="pm" aria-label="Start or pause"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+  <button id="bReset" class="pm" aria-label="Reset"><svg viewBox="0 0 24 24"><path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z"/></svg></button>
+  <button id="bSkip" class="pm" aria-label="Skip"><svg viewBox="0 0 24 24"><path d="M6 6v12l8.5-6zM16 6h2v12h-2z"/></svg></button>
+  <button id="bPre" class="pm" aria-label="Preset">25</button>
+</nav>
+
+<script>
+(() => {
+  const COLORS = ['#999999', '#e2e2e2', '#ffb000', '#39d98a', '#ff5a5f', '#4da3ff'];
+  const KEY = 'flipclock.v1';
+  const S = Object.assign({ card: false, h24: true, sec: true, date: true, col: 0, zoom: 1, pre: 0, asked: false },
+    (() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } })());
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+
+  const $ = id => document.getElementById(id);
+  const root = document.documentElement, body = document.body;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const pad = n => String(n).padStart(2, '0');
+
+  /* ---------- flip digit pair ---------- */
+  class Flip {
+    constructor(host, d = 260) {
+      this.host = host; this.v = null; this.d = d;
+      host.innerHTML = '<div class="half t"><span></span></div><div class="half b"><span></span></div>';
+      this.t = host.children[0].firstChild; this.b = host.children[1].firstChild;
+    }
+    flap(cls, txt) {
+      const d = document.createElement('div');
+      d.className = 'flap ' + cls;
+      d.innerHTML = '<span></span>'; d.firstChild.textContent = txt;
+      this.host.appendChild(d); return d;
+    }
+    set(v, animate = true) {
+      if (v === this.v) return;
+      const old = this.v; this.v = v;
+      if (old === null || !animate || reduce) { this.t.textContent = v; this.b.textContent = v; return; }
+      this.t.textContent = v;                  // new top shows behind the falling flap
+      const ft = this.flap('t', old), fb = this.flap('b', v), d = this.d;
+      ft.animate([{ transform: 'rotateX(0)' }, { transform: 'rotateX(-90deg)' }], { duration: d, easing: 'ease-in', fill: 'forwards' });
+      const a = fb.animate([{ transform: 'rotateX(90deg)' }, { transform: 'rotateX(0)' }], { duration: d, delay: d, easing: 'ease-out', fill: 'both' });
+      a.onfinish = () => { this.b.textContent = this.v; ft.remove(); fb.remove(); };
+    }
+  }
+  const hours = new Flip($('u1')), mins = new Flip($('u2')), secs = new Flip($('u3'), 150);
+
+  /* ---------- layout: fit any screen ---------- */
+  let ratio = 1.2;                              // width of "88" per 1em in the active font
+  function measure() {
+    const c = measure.c || (measure.c = document.createElement('canvas').getContext('2d'));
+    c.font = '800 100px ' + getComputedStyle(body).fontFamily;
+    ratio = c.measureText('88').width / 100 || 1.2;
+  }
+  function layout() {
+    const W = innerWidth, H = innerHeight, portrait = H >= W;
+    const n = 2, gap = .1, tot = n + gap * (n - 1);
+    let s = portrait ? Math.min(W * (S.card ? .86 : .96), (H * .92) / tot)
+                       : Math.min(H * (S.card ? .8 : .86), (W * .92) / tot);
+    root.style.setProperty('--g', gap);
+    const fit = S.card ? .8 : .94;
+    s *= Math.min(1, Math.max(.4, S.zoom));
+    root.style.setProperty('--s', s + 'px');
+    root.style.setProperty('--f', Math.min(s * .95, fit * s / ratio) + 'px');
+  }
+
+  /* ---------- apply settings ---------- */
+  function apply() {
+    body.classList.toggle('card', S.card);
+    root.style.setProperty('--fg', COLORS[S.col]);
+    $('bFmt').textContent = S.h24 ? '24' : '12';
+    $('bSec').classList.toggle('off', !S.sec);
+    $('bDate').classList.toggle('off', !S.date);
+    $('u3').classList.toggle('hid', !S.sec || P.on); body.classList.toggle('pomo', P.on);
+    $('lbl1').classList.toggle('hid', !S.date && !P.on);
+    $('lbl2').classList.toggle('hid', !S.date && !P.on);
+    layout(); tick(false);
+  }
+
+  /* ---------- pomodoro ---------- */
+  const PRE = [[25, 5, 15], [50, 10, 20], [15, 3, 10]];
+  const NAMES = { focus: 'FOCUS', short: 'SHORT BREAK', long: 'LONG BREAK' };
+  const P = { on: false, phase: 'focus', running: false, endAt: 0, remain: 0, cycle: 1, left: 0, hiddenAt: 0, to: 0 };
+  const dur = ph => PRE[S.pre % 3][ph === 'focus' ? 0 : ph === 'short' ? 1 : 2] * 60000;
+  const toastEl = $('toast'); let toastT;
+  function toast(m) { toastEl.textContent = m; toastEl.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => toastEl.classList.remove('show'), 3500); }
+  let actx;
+  function beep() {
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      [0, .3, .6].forEach(t => { const o = actx.createOscillator(), g = actx.createGain(); o.frequency.value = 880; o.connect(g); g.connect(actx.destination);
+        g.gain.setValueAtTime(.25, actx.currentTime + t); g.gain.exponentialRampToValueAtTime(.001, actx.currentTime + t + .22); o.start(actx.currentTime + t); o.stop(actx.currentTime + t + .25); });
+    } catch (e) {}
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 400]);
+  }
+  function pReset() { clearTimeout(P.to); P.phase = 'focus'; P.cycle = 1; P.running = false; P.left = 0; P.remain = dur('focus'); }
+  function schedule() { clearTimeout(P.to); if (P.running) P.to = setTimeout(() => { pomoTick(false); }, Math.max(0, P.endAt - Date.now()) + 60); }
+  function pStart() {
+    if (P.running) return;
+    P.running = true; P.endAt = Date.now() + P.remain; schedule(); wake();
+    try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); } catch (e) {}
+  }
+  function pPause() { if (!P.running) return; P.remain = Math.max(0, P.endAt - Date.now()); P.running = false; clearTimeout(P.to); }
+  function pNext(auto) {
+    clearTimeout(P.to);
+    if (P.phase === 'focus') P.phase = P.cycle % 4 === 0 ? 'long' : 'short';
+    else { P.cycle = P.phase === 'long' ? 1 : P.cycle + 1; P.phase = 'focus'; }
+    P.remain = dur(P.phase); P.running = false;
+    if (auto && P.phase !== 'focus') { P.running = true; P.endAt = Date.now() + P.remain; schedule(); }
+  }
+  function complete() {
+    const was = P.phase; pNext(true); beep();
+    const msg = was === 'focus' ? 'Focus done — take a break' : 'Break over — ready to focus';
+    toast(msg);
+    if (document.hidden && 'Notification' in window && Notification.permission === 'granted' && navigator.serviceWorker)
+      navigator.serviceWorker.ready.then(r => r.showNotification('Flip Clock', { body: msg, vibrate: [200, 100, 200], tag: 'pomo' })).catch(() => {});
+  }
+  function pomoTick(animate) {
+    if (!P.on && !P.running) return;
+    if (P.running && P.endAt - Date.now() <= 0) complete();
+    if (!P.on) { updPlay(); return; }
+    const rem = P.running ? Math.max(0, P.endAt - Date.now()) : P.remain, tot = Math.ceil(rem / 1000);
+    hours.set(pad(Math.floor(tot / 60)), animate); mins.set(pad(tot % 60), animate);
+    $('lbl1').textContent = NAMES[P.phase]; $('lbl2').textContent = 'SESSION ' + P.cycle + '/4';
+    $('ampm').textContent = P.left ? 'LEFT ' + P.left : '';
+    updPlay();
+  }
+  function updPlay() {
+    $('bPlay').innerHTML = '<svg viewBox="0 0 24 24"><path d="' + (P.running ? 'M6 5h4v14H6zM14 5h4v14h-4z' : 'M8 5v14l11-7z') + '"/></svg>';
+    $('bPre').textContent = PRE[S.pre % 3][0];
+  }
+  pReset();
+
+  /* ---------- clock ---------- */
+  function tick(animate = true) {
+    if (P.on) { pomoTick(animate); return; }
+    if (P.running) pomoTick(false);
+    const n = new Date(), h = n.getHours();
+    const hh = S.h24 ? pad(h) : pad(h % 12 || 12);
+    hours.set(hh, animate); mins.set(pad(n.getMinutes()), animate);
+    $('ampm').textContent = S.h24 ? '' : (h >= 12 ? 'PM' : 'AM');
+    $('lbl1').textContent = pad(n.getDate()) + '/' + pad(n.getMonth() + 1) + '/' + pad(n.getFullYear() % 100);
+    $('lbl2').textContent = n.toLocaleDateString('en-US', { weekday: 'long' });
+    secs.set(pad(n.getSeconds()), animate);
+  }
+  (function loop() { tick(); setTimeout(loop, 1000 - (Date.now() % 1000) + 5); })();
+
+  /* ---------- pinch to zoom ---------- */
+  let pinch = null, pinched = false;
+  const dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  const stage = $('stage');
+  stage.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) { pinch = { d: dist(e.touches), z: S.zoom }; pinched = true; }
+  }, { passive: true });
+  stage.addEventListener('touchmove', e => {
+    if (pinch && e.touches.length === 2) {
+      e.preventDefault();
+      S.zoom = Math.min(1, Math.max(.4, pinch.z * dist(e.touches) / pinch.d));
+      layout();
+    }
+  }, { passive: false });
+  stage.addEventListener('touchend', e => {
+    if (e.touches.length < 2 && pinch) { pinch = null; save(); setTimeout(() => pinched = false, 300); }
+  });
+
+  /* ---------- controls ---------- */
+  const rail = $('rail'); let hideT;
+  const showRail = () => { rail.classList.add('show'); clearTimeout(hideT); hideT = setTimeout(() => rail.classList.remove('show'), 5000); };
+  $('stage').addEventListener('click', () => pinched ? 0 : rail.classList.contains('show') ? rail.classList.remove('show') : showRail());
+  rail.addEventListener('click', e => { e.stopPropagation(); showRail(); });
+  const on = (id, fn) => $(id).addEventListener('click', () => { fn(); save(); apply(); });
+  on('bStyle', () => S.card = !S.card);
+  on('bFmt', () => S.h24 = !S.h24);
+  on('bSec', () => S.sec = !S.sec);
+  on('bDate', () => S.date = !S.date);
+  on('bCol', () => S.col = (S.col + 1) % COLORS.length);
+  function askPerms() {
+    if (S.asked || !('Notification' in window) || Notification.permission !== 'default') return;
+    S.asked = true; save(); $('ask').classList.add('show');
+  }
+  $('askOk').addEventListener('click', () => { $('ask').classList.remove('show'); try { Notification.requestPermission(); } catch (e) {} });
+  $('askNo').addEventListener('click', () => $('ask').classList.remove('show'));
+  on('bPomo', () => { P.on = true; askPerms(); });
+  on('bExit', () => { P.on = false; });
+  on('bPlay', () => { P.running ? pPause() : pStart(); });
+  on('bReset', () => { pReset(); });
+  on('bSkip', () => { pNext(false); });
+  on('bPre', () => { S.pre = (S.pre + 1) % 3; if (!P.running) P.remain = dur(P.phase); });
+
+  /* ---------- keep screen awake ---------- */
+  let lock;
+  async function wake() { try { if ('wakeLock' in navigator && !lock) { lock = await navigator.wakeLock.request('screen'); lock.onrelease = () => lock = null; } } catch (e) {} }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') { if (P.running && P.phase === 'focus') P.hiddenAt = Date.now(); return; }
+    wake(); tick(false);
+    if (P.hiddenAt && P.running && P.phase === 'focus') { P.left++; toast('You left the app. Back to focus!'); if (navigator.vibrate) navigator.vibrate(250); }
+    P.hiddenAt = 0; tick(false);
+  });
+  addEventListener('pointerdown', wake, { once: true }); wake();
+
+  /* ---------- boot ---------- */
+  const relayout = () => { layout(); setTimeout(layout, 120); setTimeout(layout, 400); };
+  addEventListener('resize', relayout);
+  addEventListener('orientationchange', relayout);
+  matchMedia('(orientation: portrait)').addEventListener('change', relayout);
+  if (screen.orientation) screen.orientation.addEventListener('change', relayout);
+  if (window.visualViewport) visualViewport.addEventListener('resize', relayout);
+  measure(); apply();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { measure(); layout(); });
+  if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+})();
+</script>
+</body>
+</html>
